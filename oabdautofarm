@@ -1,0 +1,198 @@
+-- not made with chatgpt by solo best hecker skeet best cheat
+
+local tween_speed = 100; -- speed blet
+local max_distance = 10000; -- range blet
+
+local target_items = {
+    "Arrow",
+    "Rokakaka Fruit",
+    "Requiem Arrow",
+    "Frog",
+    "Nostalgic Relic",
+    "Banknote",
+    "Vampire Mask",
+    "DIO's Diary",
+    "Shadow Camera",
+    "Holy Corpse",
+    "Shiny Gem",
+    "Monochromatic Sphere",
+    "Galaxy Portal",
+    "Ender Pearl"
+};
+
+local players = game:GetService("Players");
+local localplayer = players.LocalPlayer;
+local camera = workspace.CurrentCamera;
+local screen_size = camera.ViewportSize;
+
+function draw(type)
+    local new_draw = Drawing.new(type);
+    new_draw.Transparency = 1;
+    new_draw.Visible = true;
+    return new_draw;
+end;
+
+function is_valid(obj)
+    return obj and obj.Parent ~= nil;
+end;
+
+function magnitude(point1, point2)
+    local dx = point2.X - point1.X;
+    local dy = point2.Y - point1.Y;
+    local dz = point2.Z - point1.Z;
+    return math.sqrt(dx*dx + dy*dy + dz*dz);
+end;
+
+function is_target_item(name)
+    for _, item_name in next, target_items do
+        if name == item_name then
+            return true;
+        end;
+    end;
+    return false;
+end;
+
+function get_item_position(item)
+    if item:IsA("Tool") then
+        local handle = item:FindFirstChild("Handle");
+        if handle then
+            return handle.Position;
+        end;
+    elseif item:IsA("Model") then
+        local primary = item.PrimaryPart;
+        if primary then
+            return primary.Position;
+        end;
+        for _, part in next, item:GetDescendants() do
+            if part:IsA("BasePart") then
+                return part.Position;
+            end;
+        end;
+    elseif item:IsA("BasePart") then
+        return item.Position;
+    end;
+    return nil;
+end;
+
+function get_closest_item()
+    local closest_item = nil;
+    local closest_distance = math.huge;
+    local closest_position = nil;
+
+    local character = localplayer.Character;
+    if not character then return nil, closest_distance, nil end;
+
+    local humanoidrootpart = character:FindFirstChild("HumanoidRootPart");
+    if not humanoidrootpart then return nil, closest_distance, nil end;
+
+    for _, item in next, workspace:GetChildren() do
+        if is_valid(item) and is_target_item(item.Name) then
+            local item_pos = get_item_position(item);
+            if item_pos then
+                local item_distance = magnitude(item_pos, humanoidrootpart.Position);
+                if item_distance < closest_distance and item_distance <= max_distance then
+                    closest_item = item;
+                    closest_distance = item_distance;
+                    closest_position = item_pos;
+                end;
+            end;
+        end;
+    end;
+
+    return closest_item, closest_distance, closest_position;
+end;
+
+local can_tween = true;
+
+function tween_to_position(object, target_pos, duration)
+    local start_time = os.clock();
+    local start_pos = object.Position;
+    local end_time = start_time + duration;
+    can_tween = false;
+
+    while os.clock() < end_time do
+        if not is_valid(object) then
+            break;
+        end;
+
+        local alpha = (os.clock() - start_time) / duration;
+        if alpha > 1 then alpha = 1 end;
+
+        local tx, ty, tz = target_pos.X, target_pos.Y, target_pos.Z;
+        local sx, sy, sz = start_pos.X, start_pos.Y, start_pos.Z;
+
+        object.Position = Vector3.new(
+            sx + (tx - sx) * alpha,
+            sy + (ty - sy) * alpha,
+            sz + (tz - sz) * alpha
+        );
+        object.Velocity = Vector3.new(0, 0, 0);
+    end;
+
+    can_tween = true;
+end;
+
+function set_noclip()
+    local character = localplayer.Character;
+    if character then
+        for _, v in next, character:GetDescendants() do
+            if v:IsA("BasePart") then
+                v.CanCollide = false;
+            end;
+        end;
+    end;
+end;
+
+function count_items()
+    local count = 0;
+    for _, item in next, workspace:GetChildren() do
+        if is_target_item(item.Name) then
+            count = count + 1;
+        end;
+    end;
+    return count;
+end;
+
+local status = draw("Text");
+status.Center = true;
+status.Size = 20;
+status.Color = Color3.fromRGB(255, 255, 255);
+status.Outline = true;
+
+function update_auto_farm()
+    screen_size = camera.ViewportSize;
+    status.Position = Vector2.new(screen_size.X / 2, 50);
+
+    set_noclip();
+
+    local character = localplayer.Character;
+    if not character then
+        status.Text = "Auto Farm: Waiting for Character...";
+        return;
+    end;
+
+    local humanoidrootpart = character:FindFirstChild("HumanoidRootPart");
+    if not humanoidrootpart then
+        status.Text = "Auto Farm: Can't find HumanoidRootPart";
+        return;
+    end;
+
+    local closest_item, item_distance, item_position = get_closest_item();
+
+    if is_valid(closest_item) and item_position then
+        status.Text = "Auto Farm: " .. closest_item.Name .. " (" .. math.floor(item_distance) .. " studs) | Items: " .. count_items();
+        humanoidrootpart.Velocity = Vector3.new(0, 0, 0);
+
+        if can_tween then
+            spawn(function()
+                tween_to_position(humanoidrootpart, item_position, item_distance / tween_speed);
+            end);
+        end;
+    else
+        status.Text = "Auto Farm: No items in range | Items: " .. count_items();
+    end;
+end;
+
+while true do
+    update_auto_farm();
+end;
